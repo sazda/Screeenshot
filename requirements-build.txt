@@ -1,0 +1,5 @@
+# Zavisnosti za pravljenje MSI instalera (samo Windows)
+-r requirements.txt
+cx_Freeze>=8,<9
+# Python 3.13+ više nema ugrađen modul msilib – ovaj paket ga zamenjuje
+python-msilib; python_version >= "3.13" and sys_platform == "win32"
