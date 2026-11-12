@@ -3,7 +3,7 @@ Screenshot alat
 Izradio: Aleksandar Sazdanović
 
 Mogućnosti:
-  - ceo ekran snima monitor na kome je kursor miša
+  - ceo ekran: korisnik levim klikom bira monitor koji se snima
   - deo ekrana se označava na bilo kom monitoru
   - snimanje celog ekrana ili izabranog dela (prevlačenjem miša)
   - čuvanje u formatu PNG, JPG, JPEG ili PDF
@@ -24,7 +24,7 @@ except ImportError as exc:  # pragma: no cover
     sys.exit(1)
 
 APP_NAME = "Screenshot alat"
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.3.0"
 AUTHOR = "Aleksandar Sazdanović"
 
 FORMATS = {
@@ -80,14 +80,6 @@ def cursor_position(widget):
         except Exception:
             pass
     return widget.winfo_pointerxy()
-
-
-def monitor_at(x, y, monitors):
-    """Monitor koji sadrži tačku (x, y); ako je nijedan ne sadrži – primarni."""
-    for m in monitors[1:]:
-        if m["left"] <= x < m["left"] + m["width"] and m["top"] <= y < m["top"] + m["height"]:
-            return m
-    return monitors[1] if len(monitors) > 1 else monitors[0]
 
 
 def grab(monitor):
@@ -197,6 +189,73 @@ class RegionSelector(tk.Toplevel):
         except tk.TclError:
             pass
         self.destroy()
+
+
+class MonitorPicker:
+    """Preko svakog monitora prikaže poluprovidan sloj. Levi klik bira
+    monitor koji se snima; Esc ili desni klik otkazuje.
+    Rezultat (self.result) je izabrani monitor ili None."""
+
+    def __init__(self, master, monitors):
+        self.master = master
+        self.result = None
+        self.done = tk.BooleanVar(master, value=False)
+        self.windows = []
+        screens = monitors[1:] or monitors[:1]
+        for i, m in enumerate(screens, start=1):
+            self.windows.append(self._make_window(m, i, len(screens)))
+        master.after(60, self._focus_under_mouse)
+
+    def _make_window(self, m, number, total):
+        w = tk.Toplevel(self.master)
+        w.overrideredirect(True)
+        w.attributes("-topmost", True)
+        try:
+            w.attributes("-alpha", 0.45)
+        except tk.TclError:
+            pass  # sistem bez providnosti – sloj je tada neproziran, snimak je i dalje ispravan
+        w.geometry(f"{m['width']}x{m['height']}+{m['left']}+{m['top']}")
+        c = tk.Canvas(w, bg="#0b1f3a", highlightthickness=0, cursor="hand2")
+        c.pack(fill="both", expand=True)
+        cx, cy = m["width"] // 2, m["height"] // 2
+        title = f"Monitor {number}" if total > 1 else "Ceo ekran"
+        c.create_text(cx, cy - 40, text=title, fill="white", font=("Segoe UI", 32, "bold"))
+        c.create_text(cx, cy + 20, fill="white", font=("Segoe UI", 16),
+                      text="Kliknite levim tasterom miša da snimite ovaj ekran")
+        c.create_text(cx, cy + 56, fill="#c8d6ea", font=("Segoe UI", 12),
+                      text="Esc ili desni klik = otkaži")
+        border = c.create_rectangle(3, 3, m["width"] - 3, m["height"] - 3,
+                                    outline="#00a2ff", width=6, state="hidden")
+        c.bind("<Enter>", lambda e: c.itemconfigure(border, state="normal"))
+        c.bind("<Leave>", lambda e: c.itemconfigure(border, state="hidden"))
+        c.bind("<ButtonRelease-1>", lambda e, mon=m: self.finish(mon))
+        c.bind("<ButtonPress-3>", lambda e: self.finish(None))
+        w.bind("<Escape>", lambda e: self.finish(None))
+        w.monitor = m
+        return w
+
+    def _focus_under_mouse(self):
+        # Fokus (za Esc) dobija sloj na monitoru na kome je miš
+        if not self.windows:
+            return
+        x, y = cursor_position(self.master)
+        target = self.windows[0]
+        for w in self.windows:
+            m = w.monitor
+            if m["left"] <= x < m["left"] + m["width"] and m["top"] <= y < m["top"] + m["height"]:
+                target = w
+        for w in self.windows:
+            w.lift()
+        target.focus_force()
+
+    def finish(self, monitor):
+        if self.done.get():
+            return
+        self.result = monitor
+        for w in self.windows:
+            w.destroy()
+        self.windows = []
+        self.done.set(True)
 
 
 class CaptureChoiceDialog(tk.Toplevel):
@@ -363,10 +422,11 @@ class App(tk.Tk):
             count = 1
         if count > 1:
             hint = (f"Povezano monitora: {count}\n"
-                    "Ceo ekran – snima se monitor na kome je miš\n"
+                    "Ceo ekran – zatim levim klikom izaberite monitor\n"
                     "Deo ekrana – označite oblast na bilo kom monitoru")
         else:
-            hint = "Ceo ekran ili deo ekrana koji označite mišem"
+            hint = ("Ceo ekran – zatim kliknite levim tasterom miša\n"
+                    "Deo ekrana – označite oblast mišem")
         dlg = CaptureChoiceDialog(self, hint, self.mode_var.get())
         self.wait_window(dlg)
         if dlg.result is None:
@@ -382,16 +442,33 @@ class App(tk.Tk):
         # Sakrij prozor da ne bi bio na snimku
         self.withdraw()
         self.update()
-        self.after(max(250, delay * 1000), self._capture)
 
-    def _capture(self):
-        region = self.mode_var.get() == "region"
+        if self.mode_var.get() == "full":
+            # Korisnik levim klikom bira monitor; snima se tek posle klika
+            try:
+                monitors = get_monitors()
+            except Exception as exc:
+                self.deiconify()
+                messagebox.showerror(APP_NAME, f"Ne mogu da pročitam monitore:\n{exc}")
+                return
+            picker = MonitorPicker(self, monitors)
+            self.wait_variable(picker.done)
+            if picker.result is None:
+                self.deiconify()
+                self.status.configure(text="Snimanje otkazano.")
+                return
+            self.update()  # da slojevi sigurno nestanu pre snimanja
+            monitor = picker.result
+            self.after(max(250, delay * 1000), lambda: self._capture(monitor))
+        else:
+            self.after(max(250, delay * 1000), self._capture)
+
+    def _capture(self, monitor=None):
+        region = monitor is None
         try:
             monitors = get_monitors()
             if region:
                 monitor = monitors[0]  # svi monitori – oblast može biti na bilo kom
-            else:
-                monitor = monitor_at(*cursor_position(self), monitors)
             img = grab(monitor)
         except Exception as exc:
             self.deiconify()

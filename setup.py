@@ -37,7 +37,27 @@ build_exe_options = {
     "include_files": [("LICENSE", "LICENSE.txt"), ("assets", "assets")],
 }
 
+# Prečica na radnoj površini (MSI tabela „Shortcut“). Uklanja se zajedno
+# sa programom pri deinstalaciji. Ikonica se uzima iz samog .exe fajla.
+desktop_shortcut = [
+    (
+        "DesktopShortcut",                 # Shortcut
+        "DesktopFolder",                   # Directory_
+        APP_NAME,                          # Name
+        "TARGETDIR",                       # Component_
+        "[TARGETDIR]ScreenshotAlat.exe",   # Target
+        None,                              # Arguments
+        "Program za snimanje ekrana",      # Description
+        None,                              # Hotkey
+        None,                              # Icon_
+        None,                              # IconIndex
+        None,                              # ShowCmd
+        "TARGETDIR",                       # WkDir
+    )
+]
+
 bdist_msi_options = {
+    "data": {"Shortcut": desktop_shortcut},
     "upgrade_code": UPGRADE_CODE,
     "add_to_path": False,
     "install_icon": "assets/icon.ico",  # ikonica u „Programs and Features“

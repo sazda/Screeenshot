@@ -6,7 +6,8 @@ Jednostavan program za snimanje ekrana sa grafičkim interfejsom.
 
 ## Mogućnosti
 
-- **Više monitora** – „Ceo ekran“ snima monitor na kome se nalazi kursor miša u trenutku snimanja; „Deo ekrana“ prikazuje sve monitore, pa se oblast može označiti na bilo kom (i preko granice dva monitora).
+- **Ceo ekran na klik** – posle izbora „Ceo ekran“ preko svakog monitora se pojavi poluprovidan sloj; levim klikom birate monitor i tek tada se on snima (Esc ili desni klik otkazuje). Kašnjenje se računa od klika.
+- **Više monitora** – „Deo ekrana“ prikazuje sve monitore, pa se oblast može označiti na bilo kom (i preko granice dva monitora).
 - **Ceo ekran ili deo ekrana** – posle klika na „Snimi ekran“ otvara se prozorčić sa izborom (tasteri `1` / `2`, `Esc` otkazuje; program pamti poslednji izbor). Za deo ekrana prikazuje se zamrznuta slika ekrana i oblast se označava prevlačenjem miša (`Esc` ili desni klik otkazuje).
 - **Formati:** PNG, JPG, JPEG, PDF.
 - Kašnjenje pre snimanja (0–30 s), npr. da stignete da otvorite meni.
@@ -71,4 +72,4 @@ python setup.py bdist_msi
 1. Povećajte `APP_VERSION` u `screenshot.py` (npr. `1.0.0` → `1.1.0`).
 2. Napravite tag sa istim brojem (`v1.1.0`).
 
-Instaler nove verzije sam uklanja staru. `UPGRADE_CODE` u `setup.py` se **nikada ne menja**.
+Instaler pravi prečice u Start meniju i na radnoj površini. Instaler nove verzije sam uklanja staru. `UPGRADE_CODE` u `setup.py` se **nikada ne menja**.
