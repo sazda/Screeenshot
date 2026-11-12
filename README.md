@@ -1,4 +1,4 @@
-# Screenshot alat
+# Screenshot
 
 Jednostavan program za snimanje ekrana sa grafičkim interfejsom.
 
@@ -12,6 +12,7 @@ Jednostavan program za snimanje ekrana sa grafičkim interfejsom.
 - **Formati:** PNG, JPG, JPEG, PDF.
 - Kašnjenje pre snimanja (0–30 s), npr. da stignete da otvorite meni.
 - Čuvanje uz dijalog „Sačuvaj kao“ ili automatski u izabrani folder.
+- **Otvaranje snimka** – opcija „Otvori snimak posle čuvanja“ (uključena podrazumevano) otvara sačuvani fajl u programu koji je u sistemu podrazumevan za taj format.
 - Meni **Pomoć → O programu**.
 - Prečica `Ctrl+S` = snimi.
 
@@ -40,7 +41,7 @@ pip install pyinstaller
 ```
 
 ```bash
-pyinstaller --onefile --windowed --name ScreenshotAlat screenshot.py
+pyinstaller --onefile --windowed --name Screenshot screenshot.py
 ```
 
 Gotov fajl se nalazi u folderu `dist/`.

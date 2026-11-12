@@ -45,7 +45,7 @@ desktop_shortcut = [
         "DesktopFolder",                   # Directory_
         APP_NAME,                          # Name
         "TARGETDIR",                       # Component_
-        "[TARGETDIR]ScreenshotAlat.exe",   # Target
+        "[TARGETDIR]Screenshot.exe",       # Target
         None,                              # Arguments
         "Program za snimanje ekrana",      # Description
         None,                              # Hotkey
@@ -73,7 +73,7 @@ executables = [
     Executable(
         "screenshot.py",
         base="gui" if sys.platform == "win32" else None,
-        target_name="ScreenshotAlat",
+        target_name="Screenshot",
         icon="assets/icon.ico",
         shortcut_name=APP_NAME,
         shortcut_dir="ProgramMenuFolder",

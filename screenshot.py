@@ -1,5 +1,5 @@
 """
-Screenshot alat
+Screenshot
 Izradio: Aleksandar Sazdanović
 
 Mogućnosti:
@@ -7,9 +7,11 @@ Mogućnosti:
   - deo ekrana se označava na bilo kom monitoru
   - snimanje celog ekrana ili izabranog dela (prevlačenjem miša)
   - čuvanje u formatu PNG, JPG, JPEG ili PDF
+  - otvaranje snimka u podrazumevanom programu
 """
 
 import os
+import subprocess
 import sys
 import tkinter as tk
 from datetime import datetime
@@ -23,8 +25,8 @@ except ImportError as exc:  # pragma: no cover
     print("Instalirajte zavisnosti komandom:  pip install -r requirements.txt")
     sys.exit(1)
 
-APP_NAME = "Screenshot alat"
-APP_VERSION = "1.3.0"
+APP_NAME = "Screenshot"
+APP_VERSION = "1.4.0"
 AUTHOR = "Aleksandar Sazdanović"
 
 FORMATS = {
@@ -86,6 +88,16 @@ def grab(monitor):
     with mss.mss() as sct:
         shot = sct.grab(monitor)
         return Image.frombytes("RGB", shot.size, shot.bgra, "raw", "BGRX")
+
+
+def open_file(path):
+    """Otvara fajl u programu koji je u sistemu podrazumevan za taj tip."""
+    if sys.platform == "win32":
+        os.startfile(path)  # noqa: S606 – putanju je napravio sam program
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", path])
+    else:
+        subprocess.Popen(["xdg-open", path])
 
 
 def save_image(img, path, fmt_key):
@@ -333,6 +345,7 @@ class App(tk.Tk):
         self.format_var = tk.StringVar(value="PNG")
         self.delay_var = tk.IntVar(value=0)
         self.ask_var = tk.BooleanVar(value=True)
+        self.open_var = tk.BooleanVar(value=True)
         self.folder_var = tk.StringVar(value=self._default_folder())
 
         self._build_menu()
@@ -398,10 +411,16 @@ class App(tk.Tk):
         self.folder_btn.grid(row=3, column=4, sticky="w", padx=(4, 0), pady=(4, 0))
         self._toggle_folder()
 
+        ttk.Checkbutton(f_fmt, text="Otvori snimak posle čuvanja",
+                        variable=self.open_var).grid(
+            row=4, column=0, columnspan=5, sticky="w", pady=(8, 0)
+        )
+
         ttk.Button(root, text="📷  Snimi ekran", command=self.take).grid(
             row=1, column=0, sticky="ew", padx=10, pady=(10, 5), ipady=6
         )
-        self.status = ttk.Label(root, text="", foreground="#555")
+        # wraplength: duga putanja se prelama umesto da razvlači prozor
+        self.status = ttk.Label(root, text="", foreground="#555", wraplength=460)
         self.status.grid(row=2, column=0, sticky="w", padx=10)
 
     def _toggle_folder(self):
@@ -519,13 +538,21 @@ class App(tk.Tk):
             return
         self.status.configure(text=f"Sačuvano: {path}  ({img.width}x{img.height})")
 
+        if self.open_var.get():
+            try:
+                open_file(path)
+            except Exception as exc:
+                messagebox.showwarning(
+                    APP_NAME, f"Snimak je sačuvan, ali ne mogu da ga otvorim:\n{exc}")
+
     def about(self):
         messagebox.showinfo(
             "O programu",
             f"{APP_NAME}  v{APP_VERSION}\n\n"
             "Program za snimanje ekrana (screenshot).\n"
             "Snimanje celog ekrana ili dela ekrana,\n"
-            "čuvanje u PNG, JPG, JPEG ili PDF formatu.\n\n"
+            "čuvanje u PNG, JPG, JPEG ili PDF formatu\n"
+            "i otvaranje snimka u podrazumevanom programu.\n\n"
             f"Izradio: {AUTHOR}",
         )
 
