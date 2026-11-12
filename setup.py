@@ -34,12 +34,13 @@ build_exe_options = {
     "packages": ["mss", "PIL", "tkinter"],
     "excludes": ["unittest", "pydoc_data", "test"],
     "include_msvcr": True,
-    "include_files": [("LICENSE", "LICENSE.txt")],
+    "include_files": [("LICENSE", "LICENSE.txt"), ("assets", "assets")],
 }
 
 bdist_msi_options = {
     "upgrade_code": UPGRADE_CODE,
     "add_to_path": False,
+    "install_icon": "assets/icon.ico",  # ikonica u „Programs and Features“
     "all_users": True,
     "initial_target_dir": rf"[ProgramFiles64Folder]\{APP_NAME}",
     "summary_data": {
@@ -53,6 +54,7 @@ executables = [
         "screenshot.py",
         base="gui" if sys.platform == "win32" else None,
         target_name="ScreenshotAlat",
+        icon="assets/icon.ico",
         shortcut_name=APP_NAME,
         shortcut_dir="ProgramMenuFolder",
         copyright=f"© {AUTHOR}",

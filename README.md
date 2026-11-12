@@ -7,12 +7,18 @@ Jednostavan program za snimanje ekrana sa grafičkim interfejsom.
 ## Mogućnosti
 
 - **Izbor ekrana** – ako je povezano više monitora, bira se jedan od njih ili „Svi monitori“ (spojena slika).
-- **Ceo ekran ili deo ekrana** – za deo ekrana prikazuje se zamrznuta slika izabranog monitora i oblast se označava prevlačenjem miša (`Esc` ili desni klik otkazuje).
+- **Ceo ekran ili deo ekrana** – posle klika na „Snimi ekran“ otvara se prozorčić sa izborom (tasteri `1` / `2`, `Esc` otkazuje; program pamti poslednji izbor). Za deo ekrana prikazuje se zamrznuta slika izabranog monitora i oblast se označava prevlačenjem miša (`Esc` ili desni klik otkazuje).
 - **Formati:** PNG, JPG, JPEG, PDF.
 - Kašnjenje pre snimanja (0–30 s), npr. da stignete da otvorite meni.
 - Čuvanje uz dijalog „Sačuvaj kao“ ili automatski u izabrani folder.
 - Meni **Pomoć → O programu**.
 - Prečica `Ctrl+S` = snimi.
+
+## Ikonica
+
+Ikonica se nalazi u `assets/icon.ico` (Windows: program, prečica, instaler) i `assets/icon.png` (prozor programa).
+Za svoju ikonicu zamenite ova dva fajla (ista imena; `.ico` treba da sadrži više veličina, bar 16–256 px).
+Postojeća ikonica se ponovo pravi komandom `python tools/make_icon.py`.
 
 ## Pokretanje
 

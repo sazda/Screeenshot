@@ -23,7 +23,7 @@ except ImportError as exc:  # pragma: no cover
     sys.exit(1)
 
 APP_NAME = "Screenshot alat"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
 AUTHOR = "Aleksandar Sazdanović"
 
 FORMATS = {
@@ -32,6 +32,16 @@ FORMATS = {
     "JPEG": (".jpeg", "JPEG"),
     "PDF": (".pdf", "PDF"),
 }
+
+
+def resource_path(name):
+    """Putanja do fajla iz foldera assets – radi i iz izvornog koda i iz
+    spakovanog programa (cx_Freeze stavlja assets pored .exe fajla)."""
+    if getattr(sys, "frozen", False):
+        base = os.path.dirname(sys.executable)
+    else:
+        base = os.path.dirname(os.path.abspath(__file__))
+    return os.path.join(base, "assets", name)
 
 
 def enable_dpi_awareness():
@@ -172,11 +182,76 @@ class RegionSelector(tk.Toplevel):
         self.destroy()
 
 
+class CaptureChoiceDialog(tk.Toplevel):
+    """Popup posle klika na „Snimi ekran“: ceo ekran ili deo ekrana.
+    Rezultat je "full", "region" ili None (otkazano)."""
+
+    def __init__(self, master, monitor_label, default="full"):
+        super().__init__(master)
+        self.result = None
+        self.title("Snimi ekran")
+        self.resizable(False, False)
+        self.transient(master)
+        if getattr(master, "icon_image", None) is not None:
+            self.iconphoto(False, master.icon_image)
+
+        body = ttk.Frame(self, padding=16)
+        body.pack(fill="both", expand=True)
+        ttk.Label(body, text="Šta želite da snimite?",
+                  font=("Segoe UI", 11, "bold")).grid(row=0, column=0, columnspan=2, sticky="w")
+        ttk.Label(body, text=monitor_label, foreground="#555").grid(
+            row=1, column=0, columnspan=2, sticky="w", pady=(2, 12))
+
+        self.btn_full = ttk.Button(body, text="🖥  Ceo ekran", width=18,
+                                   command=lambda: self.choose("full"))
+        self.btn_region = ttk.Button(body, text="✂  Deo ekrana", width=18,
+                                     command=lambda: self.choose("region"))
+        self.btn_full.grid(row=2, column=0, padx=(0, 6), ipady=8)
+        self.btn_region.grid(row=2, column=1, padx=(6, 0), ipady=8)
+        ttk.Button(body, text="Otkaži", command=self.cancel).grid(
+            row=3, column=0, columnspan=2, pady=(12, 0))
+        ttk.Label(body, text="Tasteri: 1 = ceo ekran, 2 = deo ekrana, Esc = otkaži",
+                  foreground="#777").grid(row=4, column=0, columnspan=2, pady=(8, 0))
+
+        self.bind("1", lambda e: self.choose("full"))
+        self.bind("2", lambda e: self.choose("region"))
+        self.bind("<Escape>", lambda e: self.cancel())
+        self.bind("<Return>", lambda e: self.focus_get() and self.focus_get().invoke())
+        self.protocol("WM_DELETE_WINDOW", self.cancel)
+
+        self._default_btn = self.btn_region if default == "region" else self.btn_full
+        self._center_on(master)
+        self.grab_set()
+        self.after(30, self._take_focus)
+
+    def _take_focus(self):
+        # Novi prozor ne dobija uvek fokus tastature sam od sebe
+        self.lift()
+        self.focus_force()
+        self._default_btn.focus_set()
+
+    def _center_on(self, master):
+        self.update_idletasks()
+        w, h = self.winfo_reqwidth(), self.winfo_reqheight()
+        x = master.winfo_rootx() + (master.winfo_width() - w) // 2
+        y = master.winfo_rooty() + (master.winfo_height() - h) // 3
+        self.geometry(f"+{max(0, x)}+{max(0, y)}")
+
+    def choose(self, mode):
+        self.result = mode
+        self.destroy()
+
+    def cancel(self):
+        self.result = None
+        self.destroy()
+
+
 class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title(APP_NAME)
         self.resizable(False, False)
+        self._set_icon()
 
         self.monitors = []
         self.monitor_var = tk.StringVar()
@@ -189,6 +264,16 @@ class App(tk.Tk):
         self._build_menu()
         self._build_ui()
         self.refresh_monitors()
+
+    def _set_icon(self):
+        self.icon_image = None
+        try:
+            self.icon_image = tk.PhotoImage(file=resource_path("icon.png"))
+            self.iconphoto(True, self.icon_image)
+            if sys.platform == "win32":
+                self.iconbitmap(default=resource_path("icon.ico"))
+        except (tk.TclError, OSError):
+            pass  # bez ikonice program i dalje radi
 
     @staticmethod
     def _default_folder():
@@ -226,17 +311,9 @@ class App(tk.Tk):
             row=0, column=1, padx=(6, 0)
         )
 
-        # Oblast
-        f_mode = ttk.LabelFrame(root, text="Oblast snimanja", padding=8)
-        f_mode.grid(row=1, column=0, sticky="ew", **pad)
-        ttk.Radiobutton(f_mode, text="Ceo ekran", value="full",
-                        variable=self.mode_var).grid(row=0, column=0, sticky="w")
-        ttk.Radiobutton(f_mode, text="Deo ekrana (označi mišem)", value="region",
-                        variable=self.mode_var).grid(row=0, column=1, sticky="w", padx=(20, 0))
-
         # Format i opcije
         f_fmt = ttk.LabelFrame(root, text="Čuvanje", padding=8)
-        f_fmt.grid(row=2, column=0, sticky="ew", **pad)
+        f_fmt.grid(row=1, column=0, sticky="ew", **pad)
         ttk.Label(f_fmt, text="Format:").grid(row=0, column=0, sticky="w")
         for i, key in enumerate(FORMATS):
             ttk.Radiobutton(f_fmt, text=key, value=key, variable=self.format_var).grid(
@@ -260,10 +337,10 @@ class App(tk.Tk):
         self._toggle_folder()
 
         ttk.Button(root, text="📷  Snimi ekran", command=self.take).grid(
-            row=3, column=0, sticky="ew", padx=10, pady=(10, 5), ipady=6
+            row=2, column=0, sticky="ew", padx=10, pady=(10, 5), ipady=6
         )
         self.status = ttk.Label(root, text="", foreground="#555")
-        self.status.grid(row=4, column=0, sticky="w", padx=10)
+        self.status.grid(row=3, column=0, sticky="w", padx=10)
 
     def _toggle_folder(self):
         state = "disabled" if self.ask_var.get() else "normal"
@@ -301,6 +378,13 @@ class App(tk.Tk):
         if monitor is None:
             messagebox.showerror(APP_NAME, "Nije pronađen nijedan monitor.")
             return
+        dlg = CaptureChoiceDialog(self, self.monitor_var.get(), self.mode_var.get())
+        self.wait_window(dlg)
+        if dlg.result is None:
+            self.status.configure(text="Snimanje otkazano.")
+            return
+        self.mode_var.set(dlg.result)  # zapamti izbor za sledeći put
+
         try:
             delay = max(0, int(self.delay_var.get()))
         except (tk.TclError, ValueError):
