@@ -2,7 +2,7 @@
 Pravljenje Windows MSI instalera (cx_Freeze).
 
 Pokretanje (samo na Windows-u):
-    pip install -r requirements.txt "cx_Freeze>=7.2,<8"
+    pip install -r requirements-build.txt
     python setup.py bdist_msi
 
 Gotov instaler se nalazi u folderu dist/.

@@ -57,10 +57,10 @@ MSI se pravi automatski preko GitHub Actions (`.github/workflows/build-msi.yml`)
 - posle svakog pull request-a i promene na `main` – MSI se preuzima na stranici **Actions**, u odeljku **Artifacts** izabranog pokretanja;
 - kada se napravi tag `v*` (npr. `v1.0.0`) – MSI se objavljuje i na stranici **Releases**.
 
-Ručno, na Windows-u:
+Ručno, na Windows-u (Python 3.10–3.14; na 3.13+ se automatski instalira i `python-msilib`):
 
 ```bash
-pip install -r requirements.txt "cx_Freeze>=7.2,<8"
+pip install -r requirements-build.txt
 ```
 
 ```bash
