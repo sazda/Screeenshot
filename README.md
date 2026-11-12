@@ -42,4 +42,3 @@ Gotov fajl se nalazi u folderu `dist/`.
 
 - JPG i JPEG su isti format – razlikuje se samo ekstenzija fajla.
 - PDF sadrži sliku (nije tekst koji se može pretraživati).
-- Na Linux-u sa Wayland sesijom snimanje ekrana preko X11 ne radi; koristite X11 sesiju.
