@@ -43,3 +43,27 @@ Gotov fajl se nalazi u folderu `dist/`.
 - JPG i JPEG su isti format – razlikuje se samo ekstenzija fajla.
 - PDF sadrži sliku (nije tekst koji se može pretraživati).
 - Na Linux-u sa Wayland sesijom snimanje ekrana preko X11 ne radi; koristite X11 sesiju.
+
+## Windows instaler (MSI)
+
+MSI se pravi automatski preko GitHub Actions (`.github/workflows/build-msi.yml`) na Windows računaru:
+
+- posle svakog pull request-a i promene na `main` – MSI se preuzima na stranici **Actions**, u odeljku **Artifacts** izabranog pokretanja;
+- kada se napravi tag `v*` (npr. `v1.0.0`) – MSI se objavljuje i na stranici **Releases**.
+
+Ručno, na Windows-u:
+
+```bash
+pip install -r requirements.txt "cx_Freeze>=7.2,<8"
+```
+
+```bash
+python setup.py bdist_msi
+```
+
+### Nova verzija
+
+1. Povećajte `APP_VERSION` u `screenshot.py` (npr. `1.0.0` → `1.1.0`).
+2. Napravite tag sa istim brojem (`v1.1.0`).
+
+Instaler nove verzije sam uklanja staru. `UPGRADE_CODE` u `setup.py` se **nikada ne menja**.

@@ -23,7 +23,7 @@ except ImportError as exc:  # pragma: no cover
     sys.exit(1)
 
 APP_NAME = "Screenshot alat"
-APP_VERSION = "1.0"
+APP_VERSION = "1.0.0"
 AUTHOR = "Aleksandar Sazdanović"
 
 FORMATS = {
