@@ -3,7 +3,8 @@ Screenshot alat
 Izradio: Aleksandar Sazdanović
 
 Mogućnosti:
-  - izbor monitora (ako je povezano više monitora) ili svih monitora zajedno
+  - ceo ekran snima monitor na kome je kursor miša
+  - deo ekrana se označava na bilo kom monitoru
   - snimanje celog ekrana ili izabranog dela (prevlačenjem miša)
   - čuvanje u formatu PNG, JPG, JPEG ili PDF
 """
@@ -23,7 +24,7 @@ except ImportError as exc:  # pragma: no cover
     sys.exit(1)
 
 APP_NAME = "Screenshot alat"
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.2.0"
 AUTHOR = "Aleksandar Sazdanović"
 
 FORMATS = {
@@ -60,20 +61,33 @@ def enable_dpi_awareness():
         pass
 
 
-def list_monitors():
-    """Vraća listu (naziv, monitor_dict). Indeks 0 u mss-u su svi monitori."""
+def get_monitors():
+    """mss: [0] = ceo virtuelni ekran (svi monitori), [1:] = pojedinačni monitori."""
     with mss.mss() as sct:
-        mons = sct.monitors
-    result = []
-    for i, m in enumerate(mons[1:], start=1):
-        label = f"Monitor {i}  ({m['width']}x{m['height']}, pozicija {m['left']},{m['top']})"
-        if i == 1:
-            label += "  [primarni]"
-        result.append((label, m))
-    if len(mons) > 2:
-        m = mons[0]
-        result.append((f"Svi monitori  ({m['width']}x{m['height']})", m))
-    return result
+        return [dict(m) for m in sct.monitors]
+
+
+def cursor_position(widget):
+    """Pozicija kursora u pikselima ekrana."""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            pt = wintypes.POINT()
+            if ctypes.windll.user32.GetCursorPos(ctypes.byref(pt)):
+                return pt.x, pt.y
+        except Exception:
+            pass
+    return widget.winfo_pointerxy()
+
+
+def monitor_at(x, y, monitors):
+    """Monitor koji sadrži tačku (x, y); ako je nijedan ne sadrži – primarni."""
+    for m in monitors[1:]:
+        if m["left"] <= x < m["left"] + m["width"] and m["top"] <= y < m["top"] + m["height"]:
+            return m
+    return monitors[1] if len(monitors) > 1 else monitors[0]
 
 
 def grab(monitor):
@@ -94,10 +108,10 @@ def save_image(img, path, fmt_key):
 
 
 class RegionSelector(tk.Toplevel):
-    """Prikazuje snimak monitora preko celog tog monitora i pušta korisnika
-    da mišem označi pravougaonik. Rezultat je isečena slika ili None."""
+    """Prikazuje snimak ekrana (svih monitora) preko celog ekrana i pušta
+    korisnika da mišem označi pravougaonik. Rezultat je isečena slika ili None."""
 
-    def __init__(self, master, image, monitor):
+    def __init__(self, master, image, monitor, screens=()):
         super().__init__(master)
         self.image = image
         self.result = None
@@ -118,10 +132,13 @@ class RegionSelector(tk.Toplevel):
         self.bg = ImageTk.PhotoImage(dim)
         self.full = ImageTk.PhotoImage(image)
         self.canvas.create_image(0, 0, image=self.bg, anchor="nw")
-        self.canvas.create_text(
-            20, 20, anchor="nw", fill="white", font=("Segoe UI", 14, "bold"),
-            text="Prevucite mišem preko dela ekrana  •  Esc = otkaži",
-        )
+        # Uputstvo u gornjem levom uglu svakog monitora
+        for m in screens or (monitor,):
+            self.canvas.create_text(
+                m["left"] - monitor["left"] + 20, m["top"] - monitor["top"] + 20,
+                anchor="nw", fill="white", font=("Segoe UI", 14, "bold"),
+                text="Prevucite mišem preko dela ekrana  •  Esc = otkaži",
+            )
         self.crop_id = None
 
         self.canvas.bind("<ButtonPress-1>", self.on_press)
@@ -186,7 +203,7 @@ class CaptureChoiceDialog(tk.Toplevel):
     """Popup posle klika na „Snimi ekran“: ceo ekran ili deo ekrana.
     Rezultat je "full", "region" ili None (otkazano)."""
 
-    def __init__(self, master, monitor_label, default="full"):
+    def __init__(self, master, hint, default="full"):
         super().__init__(master)
         self.result = None
         self.title("Snimi ekran")
@@ -199,7 +216,7 @@ class CaptureChoiceDialog(tk.Toplevel):
         body.pack(fill="both", expand=True)
         ttk.Label(body, text="Šta želite da snimite?",
                   font=("Segoe UI", 11, "bold")).grid(row=0, column=0, columnspan=2, sticky="w")
-        ttk.Label(body, text=monitor_label, foreground="#555").grid(
+        ttk.Label(body, text=hint, foreground="#555").grid(
             row=1, column=0, columnspan=2, sticky="w", pady=(2, 12))
 
         self.btn_full = ttk.Button(body, text="🖥  Ceo ekran", width=18,
@@ -253,8 +270,6 @@ class App(tk.Tk):
         self.resizable(False, False)
         self._set_icon()
 
-        self.monitors = []
-        self.monitor_var = tk.StringVar()
         self.mode_var = tk.StringVar(value="full")
         self.format_var = tk.StringVar(value="PNG")
         self.delay_var = tk.IntVar(value=0)
@@ -263,7 +278,6 @@ class App(tk.Tk):
 
         self._build_menu()
         self._build_ui()
-        self.refresh_monitors()
 
     def _set_icon(self):
         self.icon_image = None
@@ -300,20 +314,9 @@ class App(tk.Tk):
         root = ttk.Frame(self, padding=10)
         root.grid(sticky="nsew")
 
-        # Monitor
-        f_mon = ttk.LabelFrame(root, text="Ekran", padding=8)
-        f_mon.grid(row=0, column=0, sticky="ew", **pad)
-        self.monitor_combo = ttk.Combobox(
-            f_mon, textvariable=self.monitor_var, state="readonly", width=48
-        )
-        self.monitor_combo.grid(row=0, column=0, sticky="ew")
-        ttk.Button(f_mon, text="Osveži", command=self.refresh_monitors).grid(
-            row=0, column=1, padx=(6, 0)
-        )
-
         # Format i opcije
         f_fmt = ttk.LabelFrame(root, text="Čuvanje", padding=8)
-        f_fmt.grid(row=1, column=0, sticky="ew", **pad)
+        f_fmt.grid(row=0, column=0, sticky="ew", **pad)
         ttk.Label(f_fmt, text="Format:").grid(row=0, column=0, sticky="w")
         for i, key in enumerate(FORMATS):
             ttk.Radiobutton(f_fmt, text=key, value=key, variable=self.format_var).grid(
@@ -337,10 +340,10 @@ class App(tk.Tk):
         self._toggle_folder()
 
         ttk.Button(root, text="📷  Snimi ekran", command=self.take).grid(
-            row=2, column=0, sticky="ew", padx=10, pady=(10, 5), ipady=6
+            row=1, column=0, sticky="ew", padx=10, pady=(10, 5), ipady=6
         )
         self.status = ttk.Label(root, text="", foreground="#555")
-        self.status.grid(row=3, column=0, sticky="w", padx=10)
+        self.status.grid(row=2, column=0, sticky="w", padx=10)
 
     def _toggle_folder(self):
         state = "disabled" if self.ask_var.get() else "normal"
@@ -348,37 +351,23 @@ class App(tk.Tk):
         self.folder_btn.configure(state=state)
 
     # ---------- akcije ----------
-    def refresh_monitors(self):
-        try:
-            self.monitors = list_monitors()
-        except Exception as exc:
-            messagebox.showerror(APP_NAME, f"Ne mogu da pročitam monitore:\n{exc}")
-            self.monitors = []
-        labels = [m[0] for m in self.monitors]
-        self.monitor_combo["values"] = labels
-        if labels and self.monitor_var.get() not in labels:
-            self.monitor_var.set(labels[0])
-        self.monitor_combo.configure(state="readonly" if len(labels) > 1 else "disabled")
-        self.status.configure(text=f"Pronađeno monitora: {sum(1 for l in labels if l.startswith('Monitor'))}")
-
     def choose_folder(self):
         d = filedialog.askdirectory(initialdir=self.folder_var.get() or os.path.expanduser("~"))
         if d:
             self.folder_var.set(d)
 
-    def _selected_monitor(self):
-        label = self.monitor_var.get()
-        for l, m in self.monitors:
-            if l == label:
-                return m
-        return self.monitors[0][1] if self.monitors else None
-
     def take(self):
-        monitor = self._selected_monitor()
-        if monitor is None:
-            messagebox.showerror(APP_NAME, "Nije pronađen nijedan monitor.")
-            return
-        dlg = CaptureChoiceDialog(self, self.monitor_var.get(), self.mode_var.get())
+        try:
+            count = len(get_monitors()) - 1
+        except Exception:
+            count = 1
+        if count > 1:
+            hint = (f"Povezano monitora: {count}\n"
+                    "Ceo ekran – snima se monitor na kome je miš\n"
+                    "Deo ekrana – označite oblast na bilo kom monitoru")
+        else:
+            hint = "Ceo ekran ili deo ekrana koji označite mišem"
+        dlg = CaptureChoiceDialog(self, hint, self.mode_var.get())
         self.wait_window(dlg)
         if dlg.result is None:
             self.status.configure(text="Snimanje otkazano.")
@@ -393,18 +382,24 @@ class App(tk.Tk):
         # Sakrij prozor da ne bi bio na snimku
         self.withdraw()
         self.update()
-        self.after(max(250, delay * 1000), lambda: self._capture(monitor))
+        self.after(max(250, delay * 1000), self._capture)
 
-    def _capture(self, monitor):
+    def _capture(self):
+        region = self.mode_var.get() == "region"
         try:
+            monitors = get_monitors()
+            if region:
+                monitor = monitors[0]  # svi monitori – oblast može biti na bilo kom
+            else:
+                monitor = monitor_at(*cursor_position(self), monitors)
             img = grab(monitor)
         except Exception as exc:
             self.deiconify()
             messagebox.showerror(APP_NAME, f"Snimanje nije uspelo:\n{exc}")
             return
 
-        if self.mode_var.get() == "region":
-            selector = RegionSelector(self, img, monitor)
+        if region:
+            selector = RegionSelector(self, img, monitor, monitors[1:])
             self.wait_window(selector)
             img = selector.result
             if img is None:
@@ -452,7 +447,7 @@ class App(tk.Tk):
             "O programu",
             f"{APP_NAME}  v{APP_VERSION}\n\n"
             "Program za snimanje ekrana (screenshot).\n"
-            "Izbor monitora, celog ekrana ili dela ekrana,\n"
+            "Snimanje celog ekrana ili dela ekrana,\n"
             "čuvanje u PNG, JPG, JPEG ili PDF formatu.\n\n"
             f"Izradio: {AUTHOR}",
         )

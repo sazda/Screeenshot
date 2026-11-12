@@ -6,8 +6,8 @@ Jednostavan program za snimanje ekrana sa grafičkim interfejsom.
 
 ## Mogućnosti
 
-- **Izbor ekrana** – ako je povezano više monitora, bira se jedan od njih ili „Svi monitori“ (spojena slika).
-- **Ceo ekran ili deo ekrana** – posle klika na „Snimi ekran“ otvara se prozorčić sa izborom (tasteri `1` / `2`, `Esc` otkazuje; program pamti poslednji izbor). Za deo ekrana prikazuje se zamrznuta slika izabranog monitora i oblast se označava prevlačenjem miša (`Esc` ili desni klik otkazuje).
+- **Više monitora** – „Ceo ekran“ snima monitor na kome se nalazi kursor miša u trenutku snimanja; „Deo ekrana“ prikazuje sve monitore, pa se oblast može označiti na bilo kom (i preko granice dva monitora).
+- **Ceo ekran ili deo ekrana** – posle klika na „Snimi ekran“ otvara se prozorčić sa izborom (tasteri `1` / `2`, `Esc` otkazuje; program pamti poslednji izbor). Za deo ekrana prikazuje se zamrznuta slika ekrana i oblast se označava prevlačenjem miša (`Esc` ili desni klik otkazuje).
 - **Formati:** PNG, JPG, JPEG, PDF.
 - Kašnjenje pre snimanja (0–30 s), npr. da stignete da otvorite meni.
 - Čuvanje uz dijalog „Sačuvaj kao“ ili automatski u izabrani folder.
