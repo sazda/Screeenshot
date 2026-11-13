@@ -8,6 +8,7 @@ Mogućnosti:
   - snimanje celog ekrana ili izabranog dela (prevlačenjem miša)
   - čuvanje u formatu PNG, JPG, JPEG ili PDF
   - otvaranje snimka u podrazumevanom programu
+  - prilog u Outlook poruku (izbor prozora mišem) ili kopiranje za Ctrl+V
 """
 
 import os
@@ -16,6 +17,8 @@ import sys
 import tkinter as tk
 from datetime import datetime
 from tkinter import filedialog, messagebox, ttk
+
+import outlook_attach
 
 try:
     import mss
@@ -26,7 +29,7 @@ except ImportError as exc:  # pragma: no cover
     sys.exit(1)
 
 APP_NAME = "Screenshot"
-APP_VERSION = "1.4.0"
+APP_VERSION = "1.5.0"
 AUTHOR = "Aleksandar Sazdanović"
 
 FORMATS = {
@@ -270,6 +273,208 @@ class MonitorPicker:
         self.done.set(True)
 
 
+class WindowPicker:
+    """Izbor prozora drugog programa mišem. Ekran se blago zatamni, prozor
+    ispod kursora dobija plavi okvir, a klik ga bira. Esc / desni klik otkazuje.
+    Rezultat (self.result) je identifikator prozora (hwnd) ili None."""
+
+    BORDER = 5
+
+    def __init__(self, master, monitors, window_at, text):
+        self.master = master
+        self.window_at = window_at
+        self.result = None
+        self.done = tk.BooleanVar(master, value=False)
+        self.windows = []
+        self._pending = None
+
+        for m in monitors[1:] or monitors[:1]:
+            ov = self._toplevel(m["width"], m["height"], m["left"], m["top"], "#0b1f3a")
+            try:
+                ov.attributes("-alpha", 0.25)
+            except tk.TclError:
+                pass
+            ov.configure(cursor="hand2")
+            self.windows.append(ov)
+            # Uputstvo u neprovidnoj traci na vrhu svakog monitora
+            banner = self._toplevel(1, 1, 0, 0, "#0b1f3a")
+            lbl = tk.Label(banner, text=text, bg="#0b1f3a", fg="white",
+                           font=("Segoe UI", 13, "bold"), padx=18, pady=10)
+            lbl.pack()
+            banner.update_idletasks()
+            bw, bh = lbl.winfo_reqwidth(), lbl.winfo_reqheight()
+            banner.geometry(f"{bw}x{bh}+{m['left'] + (m['width'] - bw) // 2}+{m['top'] + 30}")
+            self.windows.append(banner)
+
+        self.edges = [self._toplevel(1, 1, -10, -10, "#00a2ff") for _ in range(4)]
+        for e in self.edges:
+            e.withdraw()
+        self.windows += self.edges
+
+        for w in self.windows:
+            w.bind("<Motion>", self._on_motion)
+            w.bind("<ButtonRelease-1>", self._on_click)
+            w.bind("<ButtonPress-3>", lambda e: self.finish(None))
+            w.bind("<Escape>", lambda e: self.finish(None))
+        master.after(60, self._focus)
+
+    def _toplevel(self, w, h, x, y, bg):
+        t = tk.Toplevel(self.master, bg=bg)
+        t.overrideredirect(True)
+        t.attributes("-topmost", True)
+        t.geometry(f"{w}x{h}+{x}+{y}")
+        return t
+
+    def _focus(self):
+        for w in self.windows:
+            if w.winfo_exists() and w.winfo_ismapped():
+                w.lift()
+        if self.windows:
+            self.windows[0].focus_force()
+
+    def _on_motion(self, _event):
+        if self._pending is None:  # najviše ~20 osvežavanja u sekundi
+            self._pending = self.master.after(50, self._highlight)
+
+    def _highlight(self):
+        self._pending = None
+        if self.done.get():
+            return
+        _hwnd, rect = self.window_at(*cursor_position(self.master))
+        if rect is None:
+            for e in self.edges:
+                e.withdraw()
+            return
+        l, t, r, b = rect
+        k = self.BORDER
+        geo = [(r - l, k, l, t), (r - l, k, l, b - k), (k, b - t, l, t), (k, b - t, r - k, t)]
+        for e, (w, h, x, y) in zip(self.edges, geo):
+            e.geometry(f"{max(1, w)}x{max(1, h)}+{x}+{y}")
+            e.deiconify()
+            e.lift()
+
+    def _on_click(self, _event):
+        x, y = cursor_position(self.master)
+        self._close()
+        self.master.update()  # sloj nestaje pre utvrđivanja prozora
+        hwnd, _rect = self.window_at(x, y)
+        self.result = hwnd
+        self.done.set(True)
+
+    def _close(self):
+        if self._pending is not None:
+            self.master.after_cancel(self._pending)
+            self._pending = None
+        for w in self.windows:
+            if w.winfo_exists():
+                w.destroy()
+        self.windows = []
+
+    def finish(self, hwnd):
+        if self.done.get():
+            return
+        self._close()
+        self.result = hwnd
+        self.done.set(True)
+
+
+class PostSaveDialog(tk.Toplevel):
+    """Prozorčić posle čuvanja: prilog u Outlook poruku ili kopiranje
+    snimka kao fajla (Ctrl+V u poruci = prilog)."""
+
+    def __init__(self, app, path):
+        super().__init__(app)
+        self.app = app
+        self.path = path
+        self.title("Snimak sačuvan")
+        self.resizable(False, False)
+        self.attributes("-topmost", True)
+        if getattr(app, "icon_image", None) is not None:
+            self.iconphoto(False, app.icon_image)
+
+        body = ttk.Frame(self, padding=16)
+        body.pack(fill="both", expand=True)
+        ttk.Label(body, text="Snimak je sačuvan", font=("Segoe UI", 11, "bold")).grid(
+            row=0, column=0, sticky="w")
+        ttk.Label(body, text=os.path.basename(path), foreground="#555").grid(
+            row=1, column=0, sticky="w", pady=(2, 12))
+
+        self.btn_outlook = ttk.Button(body, text="📎  Priloži u Outlook poruku",
+                                      command=self.attach_outlook)
+        self.btn_outlook.grid(row=2, column=0, sticky="ew", ipady=6)
+        ttk.Label(body, text="Prvo kliknite „Odgovori“ u Outlook-u, pa ovde, "
+                             "pa na prozor sa odgovorom.",
+                  foreground="#777", wraplength=330).grid(row=3, column=0, sticky="w", pady=(2, 10))
+        self.btn_copy = ttk.Button(body, text="📋  Kopiraj kao prilog (Ctrl+V)",
+                                   command=self.copy_clipboard)
+        self.btn_copy.grid(row=4, column=0, sticky="ew", ipady=6)
+        self.msg = ttk.Label(body, text="", wraplength=330)
+        self.msg.grid(row=5, column=0, sticky="w", pady=(10, 0))
+        ttk.Button(body, text="Zatvori", command=self.destroy).grid(row=6, column=0, pady=(10, 0))
+
+        self.bind("<Escape>", lambda e: self.destroy())
+        self._place()
+        self.after(30, self._take_focus)
+
+    def _take_focus(self):
+        self.lift()
+        self.focus_force()
+        self.btn_outlook.focus_set()
+
+    def _place(self):
+        self.update_idletasks()
+        a = self.app
+        x = a.winfo_rootx() + (a.winfo_width() - self.winfo_reqwidth()) // 2
+        y = a.winfo_rooty() + 40
+        self.geometry(f"+{max(0, x)}+{max(0, y)}")
+
+    def _show(self, text, ok):
+        self.msg.configure(text=text, foreground="#1a7f37" if ok else "#b42318")
+
+    def attach_outlook(self):
+        # Sakrij prozore programa da ne zaklanjaju Outlook
+        self.withdraw()
+        self.app.withdraw()
+        self.app.update()
+        try:
+            monitors = get_monitors()
+        except Exception:
+            monitors = [{"left": 0, "top": 0, "width": self.winfo_screenwidth(),
+                         "height": self.winfo_screenheight()}]
+        picker = WindowPicker(self.app, monitors, outlook_attach.window_at,
+                              "Kliknite na Outlook prozor sa započetim odgovorom  •  Esc = otkaži")
+        self.app.wait_variable(picker.done)
+        self.app.deiconify()
+
+        if picker.result is None:
+            self.deiconify()
+            self._show("Izbor prozora je otkazan.", ok=False)
+            return
+        try:
+            subject = outlook_attach.attach_to_window(picker.result, self.path)
+        except outlook_attach.OutlookError as exc:
+            self.deiconify()
+            self._show(str(exc) + "\n\nMožete i da kopirate snimak i u poruci pritisnete Ctrl+V.",
+                       ok=False)
+            return
+        except Exception as exc:
+            self.deiconify()
+            self._show(f"Neočekivana greška: {exc}", ok=False)
+            return
+        self.app.status.configure(text=f"Priloženo u Outlook poruku: {subject}")
+        self.destroy()
+
+    def copy_clipboard(self):
+        try:
+            outlook_attach.copy_file_to_clipboard(self.path)
+        except Exception as exc:
+            self._show(f"Kopiranje nije uspelo: {exc}", ok=False)
+            return
+        self.app.status.configure(text="Snimak je kopiran – u poruci pritisnite Ctrl+V.")
+        self._show("Kopirano. U Outlook poruci (ili folderu) pritisnite Ctrl+V – "
+                   "snimak se dodaje kao prilog.", ok=True)
+
+
 class CaptureChoiceDialog(tk.Toplevel):
     """Popup posle klika na „Snimi ekran“: ceo ekran ili deo ekrana.
     Rezultat je "full", "region" ili None (otkazano)."""
@@ -346,6 +551,7 @@ class App(tk.Tk):
         self.delay_var = tk.IntVar(value=0)
         self.ask_var = tk.BooleanVar(value=True)
         self.open_var = tk.BooleanVar(value=True)
+        self.offer_var = tk.BooleanVar(value=outlook_attach.is_supported())
         self.folder_var = tk.StringVar(value=self._default_folder())
 
         self._build_menu()
@@ -415,6 +621,11 @@ class App(tk.Tk):
                         variable=self.open_var).grid(
             row=4, column=0, columnspan=5, sticky="w", pady=(8, 0)
         )
+        if outlook_attach.is_supported():
+            ttk.Checkbutton(f_fmt, text="Posle snimanja ponudi prilog za Outlook",
+                            variable=self.offer_var).grid(
+                row=5, column=0, columnspan=5, sticky="w", pady=(4, 0)
+            )
 
         ttk.Button(root, text="📷  Snimi ekran", command=self.take).grid(
             row=1, column=0, sticky="ew", padx=10, pady=(10, 5), ipady=6
@@ -545,6 +756,9 @@ class App(tk.Tk):
                 messagebox.showwarning(
                     APP_NAME, f"Snimak je sačuvan, ali ne mogu da ga otvorim:\n{exc}")
 
+        if self.offer_var.get() and outlook_attach.is_supported():
+            PostSaveDialog(self, path)
+
     def about(self):
         messagebox.showinfo(
             "O programu",
@@ -552,7 +766,8 @@ class App(tk.Tk):
             "Program za snimanje ekrana (screenshot).\n"
             "Snimanje celog ekrana ili dela ekrana,\n"
             "čuvanje u PNG, JPG, JPEG ili PDF formatu\n"
-            "i otvaranje snimka u podrazumevanom programu.\n\n"
+            "otvaranje snimka u podrazumevanom programu\n"
+            "i prilog u Outlook poruku.\n\n"
             f"Izradio: {AUTHOR}",
         )
 

@@ -13,6 +13,10 @@ Jednostavan program za snimanje ekrana sa grafičkim interfejsom.
 - Kašnjenje pre snimanja (0–30 s), npr. da stignete da otvorite meni.
 - Čuvanje uz dijalog „Sačuvaj kao“ ili automatski u izabrani folder.
 - **Otvaranje snimka** – opcija „Otvori snimak posle čuvanja“ (uključena podrazumevano) otvara sačuvani fajl u programu koji je u sistemu podrazumevan za taj format.
+- **Prilog u Outlook poruku** (Windows, klasični Outlook) – posle snimanja se pojavi prozorčić:
+  - **Priloži u Outlook poruku**: prvo u Outlook-u kliknite „Odgovori“ ili „Odgovori svima“, zatim ovo dugme, pa kliknite na prozor sa odgovorom (radi i za odgovor u posebnom prozoru i za odgovor u glavnom Outlook prozoru). Snimak se dodaje kao **prilog**; poruka se ne šalje sama. Na primljenu poruku (bez započetog odgovora) program ne dodaje ništa.
+  - **Kopiraj kao prilog (Ctrl+V)**: rezervna opcija – snimak se kopira kao fajl, pa se `Ctrl+V` u poruci zalepi kao prilog.
+  - Prozorčić se isključuje opcijom „Posle snimanja ponudi prilog za Outlook“.
 - Meni **Pomoć → O programu**.
 - Prečica `Ctrl+S` = snimi.
 

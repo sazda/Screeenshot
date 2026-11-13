@@ -31,7 +31,8 @@ AUTHOR = _const("AUTHOR")
 UPGRADE_CODE = "{45C465BA-D486-47AA-ABF5-D123401B200A}"
 
 build_exe_options = {
-    "packages": ["mss", "PIL", "tkinter"],
+    "packages": ["mss", "PIL", "tkinter"]
+    + (["win32com", "pythoncom", "pywintypes"] if sys.platform == "win32" else []),
     "excludes": ["unittest", "pydoc_data", "test"],
     "include_msvcr": True,
     "include_files": [("LICENSE", "LICENSE.txt"), ("assets", "assets")],
